@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -6,22 +6,26 @@ from src.chat.schemas import QuestionRequest, AnswerResponse, ChatHistoryRespons
 from src.chat.service import chat_service
 from src.database import get_db
 from src.core.logging import log_request
+from src.core.rate_limit import limiter
+from src.core.security import verify_api_key
 
 router = APIRouter()
 
 @router.post("/ask",response_model=AnswerResponse)
+@limiter.limit("10/minute")
 async def ask_question(
-    request: QuestionRequest,
-    db: Session = Depends(get_db)
+    request: Request,
+    question_data: QuestionRequest,
+    db: Session = Depends(get_db),
 ):
     """Ask a question and get an answer based on documents"""
-    log_request("/chat/ask", "POST", question= request.question[:50])
+    log_request("/chat/ask", "POST", question= question_data.question[:50])
     
     try:
         answer = chat_service.ask_question(
-            question=request.question,
-            document_ids=request.document_ids,
-            top_k=request.top_k or 3,
+            question=question_data.question,
+            document_ids=question_data.document_ids,
+            top_k=question_data.top_k or 3,
             db=db
         )
         
@@ -35,9 +39,11 @@ async def ask_question(
         
         
 @router.get("/ask/simple")
+@limiter.limit("10/minute")
 async def ask_question_simple(
     question: str,
-    db: Session = Depends(get_db)
+    request : Request,
+    db: Session = Depends(get_db),
 ):
     """Simple endpoint: just ask a question"""
     log_request("/chat/ask/simple","GET", question = question[:50])
@@ -64,9 +70,11 @@ async def ask_question_simple(
         
         
 @router.get("/history", response_model=List[ChatHistoryResponse])
+@limiter.limit("10/minute")
 async def get_chat_history(
+    request : Request,
     limit: int = 50,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get recent chat history"""
     log_request("/chat/history", "GET", limit=limit)

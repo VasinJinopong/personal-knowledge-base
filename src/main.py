@@ -1,5 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 
@@ -9,7 +11,30 @@ from src.database import init_db
 from src.documents.router import router as documents_router
 from src.chat.router import router as chat_router
 
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from src.core.rate_limit import limiter
+
 settings = get_settings()
+
+# API Key Middleware
+class APIKeyMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        # Skip health check endpoint
+        if request.url.path in ["/","/health"]:
+            return await call_next(request)
+        
+        # Check API Key
+        api_key = request.headers.get("X-API-Key")
+        
+        if api_key != settings.API_KEY:
+            return JSONResponse(
+                status_code=403, content={"detail":"Invalid or missing API Key"}
+            )
+        
+        response = await call_next(request)
+        return response
+
 
 
 @asynccontextmanager
@@ -37,6 +62,14 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Add Rate Limiter
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Add API Key Middleware
+app.add_middleware(APIKeyMiddleware)
+
+# Add CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
