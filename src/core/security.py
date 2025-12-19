@@ -3,7 +3,7 @@ from fastapi.security import APIKeyHeader
 from src.core.config import get_settings
 
 
-api_key_header = APIKeyHeader(name="X-API-Key")
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 EXCLUDE_PATHS = ["/docs", "/redoc", "/openapi.json"]
