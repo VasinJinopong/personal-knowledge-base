@@ -10,6 +10,7 @@ from src.core.logging import logger
 from src.database import init_db
 from src.documents.router import router as documents_router
 from src.chat.router import router as chat_router
+from fastapi.security import APIKeyHeader
 
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -17,11 +18,14 @@ from src.core.rate_limit import limiter
 
 settings = get_settings()
 
+# Define API Key security scheme
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
 # API Key Middleware
 class APIKeyMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         # Skip health check endpoint
-        if request.url.path in ["/","/health","/docs", "/openapi.json", "/redocs"]:
+        if request.url.path in ["/","/health","/docs", "/openapi.json", "/redoc"]:
             return await call_next(request)
         
         # Check API Key
@@ -61,6 +65,26 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan
 )
+
+# Add security scheme to OpenAPI
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    
+    openapi_schema = app.openapi()
+    openapi_schema["components"]["securitySchemes"] = {
+        "APIKeyHeader": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "X-API-Key"
+        }
+    }
+    openapi_schema["security"] = [{"APIKeyHeader": []}]
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
+
 
 # Add Rate Limiter
 app.state.limiter = limiter
