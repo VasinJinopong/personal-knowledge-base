@@ -33,7 +33,12 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         
         if api_key != settings.API_KEY:
             return JSONResponse(
-                status_code=403, content={"detail":"Invalid or missing API Key"}
+                status_code=403,
+                content={"detail": "Invalid or missing API Key"},
+                headers={
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*"
+                }
             )
         
         response = await call_next(request)
