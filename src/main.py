@@ -21,7 +21,7 @@ settings = get_settings()
 class APIKeyMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         # Skip health check endpoint
-        if request.url.path in ["/","/health"]:
+        if request.url.path in ["/","/health","/docs", "/openapi.json", "/redocs"]:
             return await call_next(request)
         
         # Check API Key
