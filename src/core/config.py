@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     OPENAI_CHAT_MODEL: str = "gpt-3.5-turbo"
     
     # Vector Store
-    CHROMA_PERSIST_DIR:str = "./chroma_db"
+    CHROMA_PERSIST_DIR:str = "/app/data/chroma_db"
     CHROMA_COLLECTION_NAME:str = "documents"
     
     # RAG Settings
@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     TOP_K_RESULTS: int =3
     
     # File Upload
-    UPLOAD_DIR:str= "./uploads"
+    UPLOAD_DIR:str= "/app/data/uploads"
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024 #10MB
     
     # Usage
