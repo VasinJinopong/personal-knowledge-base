@@ -189,6 +189,13 @@ class ChatService:
             # Format results
             chunks =[]
             for doc,score in results:
+                
+                # Threshold filter
+                if score > 1.4:
+                    logger.info(f"Skipping irrelevant chunk (score: {score:.2f})")
+                    continue
+                
+                
                 chunks.append({
                     "content": doc.page_content,
                     'metadata' : doc.metadata,
