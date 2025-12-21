@@ -1,0 +1,14 @@
+ขั้นตอนการพัฒนา Backend Developer
+
+ทักษะที่ต้องมี:
+1. Programming: Python, Node.js, Go
+2. Database: PostgreSQL, MongoDB
+3. API Design: REST, GraphQL
+4. Cloud: AWS, GCP, Docker
+5. Version Control: Git
+
+การเรียนรู้:
+- ทำ project จริง
+- อ่าน documentation
+- ฝึกแก้ปัญหาทุกวัน
+- เข้า community

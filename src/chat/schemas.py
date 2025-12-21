@@ -34,6 +34,7 @@ class AnswerResponse(BaseModel):
     confidence: Optional[str] = Field(
         None, description="Confidence level: high/medium/low"
     )
+    sub_questions:Optional[List[str]] = None
     created_at: datetime
     
     

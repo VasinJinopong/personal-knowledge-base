@@ -11,7 +11,7 @@ from src.vector_store.client import vector_store
 from src.core.config import get_settings
 from src.core.logging import log_request
 from src.core.rate_limit import limiter
-from src.core.security import verify_api_key
+# from src.core.security import verify_api_key
 
 
 settings = get_settings()

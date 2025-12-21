@@ -146,5 +146,169 @@ class ChatService:
         """Get recent chat history"""
         return db.query(ChatHistory).order_by(ChatHistory.created_at.desc()).limit(limit).all()
     
+    def decompose_question(self,question: str) -> List[str]:
+        """แยกคำถามเป็น sub-questions"""
+        
+        llm = ChatOpenAI(
+            model=settings.OPENAI_CHAT_MODEL,
+            temperature= 0,
+            openai_api_key=settings.OPENAI_API_KEY
+        )
+        
+        prompt = ChatPromptTemplate.from_template("""
+            Given a complex question, break it down into simpler sub-questions that can be answered independently.
+            Each sub-question should focus on a specific aspect of the original question.
+
+            Original Question: {question}
+
+            Generate 2-4 sub-questions that together will help answer the original question.
+            Return ONLY the sub-questions, one per line, without numbering or explanations.
+
+            Sub-questions:""")
+        
+        chain = prompt | llm
+        response = chain.invoke({"question" :question})
+        
+        # Parse sub-questions
+        sub_questions = [
+            q.strip()
+            for q in response.content.strip().split('\n')
+            if q.strip() and not q.strip().startswith('#')
+        ]
+        
+        return sub_questions[:4] # Max 4 sub-question
+    
+    
+    def search_sub_question(self, sub_question: str, top_k:int = 2) -> List[Dict]:
+        """Search for a single sub-question"""
+        
+        try:
+            # Use existing vector_store
+            results = vector_store.search_similar(query=sub_question, k=top_k)
+            
+            # Format results
+            chunks =[]
+            for doc,score in results:
+                chunks.append({
+                    "content": doc.page_content,
+                    'metadata' : doc.metadata,
+                    'score' : float(score)
+                })
+                
+            return chunks
+        
+        except Exception as e:
+            logger.error(f"Error searching sub-question: {e}")
+            return []
+        
+    def multi_query_rag(
+        self,
+        question: str,
+        top_k_per_query:int = 2
+    ) -> Dict:
+        """Multi-query RAG with question decomposition"""
+        
+        logger.info(f"Multi-query RAG for: {question}")
+        
+        
+        # 1. Decompose question
+        sub_questions = self.decompose_question(question)
+        logger.info(f"Sub-questions: {sub_questions}")
+        
+        
+        # 2. Search each sub-question
+        all_chunks = []
+        sub_results = {}
+        
+        for sub_q in sub_questions:
+            chunks = self.search_sub_question(sub_q, top_k_per_query)
+            all_chunks.extend(chunks)
+            sub_results[sub_q] = chunks
+            
+        # 3. Remove duplicates (by content)
+        seen_content = set()
+        unique_chunks =[]    
+        for chunk in all_chunks:
+            content = chunk['content']
+            if content not in seen_content:
+                seen_content.add(content)
+                unique_chunks.append(chunk)
+            
+        logger.info(f"Found {len(unique_chunks)} unique chunks from {len(sub_questions)} sub-questions")
+        
+        # 4. Synthesize answer
+        if not unique_chunks:
+            return {
+                "answer" : "Not found information in any documents",
+                "sources": [],
+                "confidence" : 'none',
+                "sub_questions" : sub_questions
+            }
+            
+        # Create context
+        context = "\n\n---\n\n".join([
+            f"Source {i+1}:\n{chunk['content']}"
+            for i, chunk in enumerate(unique_chunks)
+        ])
+        
+        # Generate answer
+        llm = ChatOpenAI(
+            model=settings.OPENAI_CHAT_MODEL,
+            temperature=0.3,
+            openai_api_key=settings.OPENAI_API_KEY
+        )
+        
+        
+        prompt = ChatPromptTemplate.from_template("""
+                You are a helpful assistant that synthesizes information from multiple sources.
+
+                Original Question: {question}
+
+                Sub-questions analyzed:
+                {sub_questions}
+
+                Context from documents:
+                {context}
+
+                Instructions:
+                1. Answer the original question by integrating information from ALL relevant sources
+                2. Show connections between different pieces of information
+                3. If sources complement each other, explain how
+                4. Be comprehensive but concise
+                5. Answer in Thai if the question is in Thai
+
+                Answer:""")
+        chain = prompt | llm
+        response = chain.invoke({
+            "question" : question,
+            "sub_questions": "\n".join([f"- {sq}" for sq in sub_questions]),
+            "context" : context
+        })
+        
+        # Determine confidence
+        confidence = self._calculate_confidence(len(unique_chunks), len(sub_questions))
+        
+        return {
+            'answer' : response.content,
+            'sources' : unique_chunks,
+            'confidence': confidence,
+            'sub_questions' : sub_questions
+        }
+        
+    def _calculate_confidence(self,chunks_found:int, sub_questions:int) -> str:
+        """Calculate confidence based on coverage"""
+        
+        coverage = chunks_found / (sub_questions*2) # Assuming 2 chunks per sub-questions
+        
+        if coverage >= 0.8:
+            return 'high'
+        elif coverage >= 0.5:
+            return "medium"
+        else:
+            return "low"
+                                                                
+                        
+        
+    
     
 chat_service = ChatService()
